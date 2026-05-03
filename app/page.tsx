@@ -40,6 +40,17 @@ export default function Page() {
     fetchData();
   }, []);
 
+  const deleteTransaction = async (id: number) => {
+    if (!confirm("削除しますか？")) {
+      return;
+    }
+    await fetch(`http://localhost:8000/api/transactions/${id}`, {
+      method: "DELETE",
+    });
+  
+    await fetchData(); // 再取得
+  };
+
   return (
     <div>
       <h1>収支一覧</h1>
@@ -67,6 +78,9 @@ export default function Page() {
       {transactions.map((t) => (
         <div key={t.id}>
           {t.type === "expense" ? "支出" : "収入"} / {t.title} / {t.amount}円
+          <button onClick={() => deleteTransaction(t.id)}>
+            削除
+          </button>
         </div>
       ))}
     </div>
