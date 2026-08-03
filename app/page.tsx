@@ -14,8 +14,10 @@ export default function Page() {
   const [editAmount, setEditAmount] = useState("");
   const [editType, setEditType] = useState("expense");
 
+  const API_URL = process.env.NEXT_PUBLIC_API_URL;
+
   const fetchData = async () => {
-    const res = await fetch("http://localhost:8000/api/transactions");
+    const res = await fetch(`${API_URL}/api/transactions`);
     const data = await res.json();
     setTransactions(data.data);
   };
@@ -25,7 +27,7 @@ export default function Page() {
   }, []);
 
   const createTransaction = async () => {
-    await fetch("http://localhost:8000/api/transactions", {
+    await fetch(`${API_URL}/api/transactions`, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
@@ -47,7 +49,7 @@ export default function Page() {
   const deleteTransaction = async (id: number) => {
     if (!confirm("削除しますか？")) return;
 
-    await fetch(`http://localhost:8000/api/transactions/${id}`, {
+    await fetch(`${API_URL}/api/transactions/${id}`, {
       method: "DELETE",
     });
 
@@ -56,7 +58,7 @@ export default function Page() {
 
   // 👇 追加（更新処理）
   const updateTransaction = async (id: number) => {
-    await fetch(`http://localhost:8000/api/transactions/${id}`, {
+    await fetch(`${API_URL}/api/transactions/${id}`, {
       method: "PUT",
       headers: {
         "Content-Type": "application/json",
