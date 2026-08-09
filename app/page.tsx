@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 
 export default function Page() {
   const [transactions, setTransactions] = useState<any[]>([]);
+  const [error, setError] = useState("");
 
   const [title, setTitle] = useState("");
   const [amount, setAmount] = useState("");
@@ -17,9 +18,25 @@ export default function Page() {
   const API_URL = process.env.NEXT_PUBLIC_API_URL;
 
   const fetchData = async () => {
-    const res = await fetch(`${API_URL}/api/transactions`);
-    const data = await res.json();
-    setTransactions(data.data);
+    try {
+      if (!API_URL) {
+        throw new Error("NEXT_PUBLIC_API_URL が設定されていません");
+      }
+  
+      const res = await fetch(`${API_URL}/api/transactions`);
+  
+      if (!res.ok) {
+        throw new Error(`取得に失敗しました: ${res.status}`);
+      }
+  
+      const data = await res.json();
+      setTransactions(data.data);
+      setError("");
+    } catch (err) {
+      setError(
+        err instanceof Error ? err.message : "一覧を取得できませんでした"
+      );
+    }
   };
 
   useEffect(() => {
@@ -79,6 +96,8 @@ export default function Page() {
   return (
     <div>
       <h1>収支一覧</h1>
+
+      {error && <p style={{ color: "red" }}>{error}</p>}
 
       {/* 登録フォーム */}
       <div style={{ marginBottom: "20px" }}>
