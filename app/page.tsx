@@ -12,34 +12,60 @@ type Transaction = {
   category_id: number;
 };
 
+type Category = {
+  id: number;
+  name: string;
+};
+
 export default function Page() {
   const [transactions, setTransactions] = useState<Transaction[]>([]);
+  const [categories, setCategories] = useState<Category[]>([]);
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(true);
 
   const [title, setTitle] = useState("");
   const [amount, setAmount] = useState("");
   const [type, setType] = useState<"expense" | "income">("expense");
+  const [categoryId, setCategoryId] = useState("");
 
   const [editingId, setEditingId] = useState<number | null>(null);
   const [editTitle, setEditTitle] = useState("");
   const [editAmount, setEditAmount] = useState("");
   const [editType, setEditType] = useState<"expense" | "income">("expense");
+  const [editCategoryId, setEditCategoryId] = useState("");
 
   const API_URL = process.env.NEXT_PUBLIC_API_URL;
 
   const fetchData = async () => {
     try {
-      if (!API_URL) throw new Error("APIのURLが設定されていません");
+      if (!API_URL) {
+        throw new Error("NEXT_PUBLIC_API_URL が設定されていません");
+      }
 
-      const res = await fetch(`${API_URL}/api/transactions`);
-      if (!res.ok) throw new Error(`取得に失敗しました: ${res.status}`);
+      const [transactionsRes, categoriesRes] = await Promise.all([
+        fetch(`${API_URL}/api/transactions`),
+        fetch(`${API_URL}/api/categories`),
+      ]);
 
-      const data = await res.json();
-      setTransactions(data.data);
+      if (!transactionsRes.ok || !categoriesRes.ok) {
+        throw new Error("データの取得に失敗しました");
+      }
+
+      const transactionsData = await transactionsRes.json();
+      const categoriesData = await categoriesRes.json();
+
+      setTransactions(transactionsData.data);
+      setCategories(categoriesData);
+
+      setCategoryId(
+        (current) => current || String(categoriesData[0]?.id ?? "")
+      );
+
       setError("");
     } catch (err) {
-      setError(err instanceof Error ? err.message : "一覧を取得できませんでした");
+      setError(
+        err instanceof Error ? err.message : "一覧を取得できませんでした"
+      );
     } finally {
       setLoading(false);
     }
@@ -58,24 +84,30 @@ export default function Page() {
       .filter((t) => t.type === "expense")
       .reduce((sum, t) => sum + t.amount, 0);
 
-    return { income, expense, balance: income - expense };
+    return {
+      income,
+      expense,
+      balance: income - expense,
+    };
   }, [transactions]);
 
   const createTransaction = async () => {
-    if (!title.trim() || !amount) {
-      setError("タイトルと金額を入力してください");
+    if (!title.trim() || !amount || !categoryId) {
+      setError("タイトル、金額、カテゴリを入力してください");
       return;
     }
 
     const res = await fetch(`${API_URL}/api/transactions`, {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: {
+        "Content-Type": "application/json",
+      },
       body: JSON.stringify({
         title,
         amount: Number(amount),
         type,
         date: new Date().toISOString().slice(0, 10),
-        category_id: 1,
+        category_id: Number(categoryId),
       }),
     });
 
@@ -92,23 +124,35 @@ export default function Page() {
   const deleteTransaction = async (id: number) => {
     if (!confirm("この収支を削除しますか？")) return;
 
-    await fetch(`${API_URL}/api/transactions/${id}`, {
+    const res = await fetch(`${API_URL}/api/transactions/${id}`, {
       method: "DELETE",
     });
+
+    if (!res.ok) {
+      setError("削除に失敗しました");
+      return;
+    }
 
     await fetchData();
   };
 
   const updateTransaction = async (id: number) => {
+    if (!editTitle.trim() || !editAmount || !editCategoryId) {
+      setError("タイトル、金額、カテゴリを入力してください");
+      return;
+    }
+
     const res = await fetch(`${API_URL}/api/transactions/${id}`, {
       method: "PUT",
-      headers: { "Content-Type": "application/json" },
+      headers: {
+        "Content-Type": "application/json",
+      },
       body: JSON.stringify({
         title: editTitle,
         amount: Number(editAmount),
         type: editType,
         date: new Date().toISOString().slice(0, 10),
-        category_id: 1,
+        category_id: Number(editCategoryId),
       }),
     });
 
@@ -119,6 +163,10 @@ export default function Page() {
 
     setEditingId(null);
     await fetchData();
+  };
+
+  const categoryName = (id: number) => {
+    return categories.find((category) => category.id === id)?.name ?? "未分類";
   };
 
   const yen = (value: number) => `¥${value.toLocaleString("ja-JP")}`;
@@ -137,10 +185,12 @@ export default function Page() {
             <span>残高</span>
             <strong>{yen(summary.balance)}</strong>
           </div>
+
           <div className={`${styles.summaryCard} ${styles.incomeCard}`}>
             <span>収入</span>
             <strong>+{yen(summary.income)}</strong>
           </div>
+
           <div className={`${styles.summaryCard} ${styles.expenseCard}`}>
             <span>支出</span>
             <strong>-{yen(summary.expense)}</strong>
@@ -162,6 +212,7 @@ export default function Page() {
               value={title}
               onChange={(e) => setTitle(e.target.value)}
             />
+
             <input
               className={styles.input}
               type="number"
@@ -169,14 +220,32 @@ export default function Page() {
               value={amount}
               onChange={(e) => setAmount(e.target.value)}
             />
+
             <select
               className={styles.select}
               value={type}
-              onChange={(e) => setType(e.target.value as "expense" | "income")}
+              onChange={(e) =>
+                setType(e.target.value as "expense" | "income")
+              }
             >
               <option value="expense">支出</option>
               <option value="income">収入</option>
             </select>
+
+            <select
+              className={styles.select}
+              value={categoryId}
+              onChange={(e) => setCategoryId(e.target.value)}
+            >
+              <option value="">カテゴリ</option>
+
+              {categories.map((category) => (
+                <option key={category.id} value={category.id}>
+                  {category.name}
+                </option>
+              ))}
+            </select>
+
             <button className={styles.primaryButton} onClick={createTransaction}>
               登録する
             </button>
@@ -191,6 +260,7 @@ export default function Page() {
               <p className={styles.sectionLabel}>HISTORY</p>
               <h2>収支一覧</h2>
             </div>
+
             <span className={styles.count}>{transactions.length} 件</span>
           </div>
 
@@ -209,12 +279,14 @@ export default function Page() {
                         value={editTitle}
                         onChange={(e) => setEditTitle(e.target.value)}
                       />
+
                       <input
                         className={styles.input}
                         type="number"
                         value={editAmount}
                         onChange={(e) => setEditAmount(e.target.value)}
                       />
+
                       <select
                         className={styles.select}
                         value={editType}
@@ -225,12 +297,28 @@ export default function Page() {
                         <option value="expense">支出</option>
                         <option value="income">収入</option>
                       </select>
+
+                      <select
+                        className={styles.select}
+                        value={editCategoryId}
+                        onChange={(e) => setEditCategoryId(e.target.value)}
+                      >
+                        <option value="">カテゴリ</option>
+
+                        {categories.map((category) => (
+                          <option key={category.id} value={category.id}>
+                            {category.name}
+                          </option>
+                        ))}
+                      </select>
+
                       <button
                         className={styles.saveButton}
                         onClick={() => updateTransaction(t.id)}
                       >
                         保存
                       </button>
+
                       <button
                         className={styles.cancelButton}
                         onClick={() => setEditingId(null)}
@@ -250,9 +338,11 @@ export default function Page() {
                         >
                           {t.type === "income" ? "↓" : "↑"}
                         </span>
+
                         <div>
                           <strong>{t.title}</strong>
                           <small>{t.date}</small>
+                          <small>{categoryName(t.category_id)}</small>
                         </div>
                       </div>
 
@@ -267,6 +357,7 @@ export default function Page() {
                           {t.type === "income" ? "+" : "-"}
                           {yen(t.amount)}
                         </strong>
+
                         <div className={styles.actions}>
                           <button
                             className={styles.textButton}
@@ -275,10 +366,12 @@ export default function Page() {
                               setEditTitle(t.title);
                               setEditAmount(String(t.amount));
                               setEditType(t.type);
+                              setEditCategoryId(String(t.category_id));
                             }}
                           >
                             編集
                           </button>
+
                           <button
                             className={styles.deleteButton}
                             onClick={() => deleteTransaction(t.id)}
