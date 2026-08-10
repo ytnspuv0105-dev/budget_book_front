@@ -34,6 +34,10 @@ export default function Page() {
   const [editType, setEditType] = useState<"expense" | "income">("expense");
   const [editCategoryId, setEditCategoryId] = useState("");
 
+  const [newCategoryName, setNewCategoryName] = useState("");
+  const [editingCategoryId, setEditingCategoryId] = useState<number | null>(null);
+  const [editCategoryName, setEditCategoryName] = useState("");
+
   const API_URL = process.env.NEXT_PUBLIC_API_URL;
 
   const fetchData = async () => {
@@ -169,6 +173,43 @@ export default function Page() {
     return categories.find((category) => category.id === id)?.name ?? "未分類";
   };
 
+  const createCategory = async () => {
+    if (!newCategoryName.trim()) return;
+  
+    const res = await fetch(`${API_URL}/api/categories`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ name: newCategoryName }),
+    });
+  
+    if (!res.ok) {
+      setError("カテゴリの追加に失敗しました");
+      return;
+    }
+  
+    setNewCategoryName("");
+    await fetchData();
+  };
+  
+  const updateCategory = async (id: number) => {
+    if (!editCategoryName.trim()) return;
+  
+    const res = await fetch(`${API_URL}/api/categories/${id}`, {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ name: editCategoryName }),
+    });
+  
+    if (!res.ok) {
+      setError("カテゴリの更新に失敗しました");
+      return;
+    }
+  
+    setEditingCategoryId(null);
+    setEditCategoryName("");
+    await fetchData();
+  };
+
   const yen = (value: number) => `¥${value.toLocaleString("ja-JP")}`;
 
   return (
@@ -252,6 +293,68 @@ export default function Page() {
           </div>
 
           {error && <p className={styles.error}>{error}</p>}
+        </section>
+
+        <section className={styles.panel}>
+          <div className={styles.panelHeader}>
+            <div>
+              <p className={styles.sectionLabel}>CATEGORIES</p>
+              <h2>カテゴリ管理</h2>
+            </div>
+          </div>
+
+          <div className={styles.categoryForm}>
+            <input
+              className={styles.input}
+              placeholder="例：交通費、趣味"
+              value={newCategoryName}
+              onChange={(e) => setNewCategoryName(e.target.value)}
+            />
+            <button className={styles.primaryButton} onClick={createCategory}>
+              追加する
+            </button>
+          </div>
+
+          <div className={styles.categoryList}>
+            {categories.map((category) => (
+              <div className={styles.categoryRow} key={category.id}>
+                {editingCategoryId === category.id ? (
+                  <>
+                    <input
+                      className={styles.input}
+                      value={editCategoryName}
+                      onChange={(e) => setEditCategoryName(e.target.value)}
+                    />
+                    <button
+                      className={styles.saveButton}
+                      onClick={() => updateCategory(category.id)}
+                    >
+                      保存
+                    </button>
+                    <button
+                      className={styles.cancelButton}
+                      onClick={() => setEditingCategoryId(null)}
+                    >
+                      キャンセル
+                    </button>
+                  </>
+                ) : (
+                  <>
+                    <span>{category.name}</span>
+                    <button
+                      className={styles.textButton}
+                      onClick={() => {
+                        setEditingCategoryId(category.id);
+                        setEditCategoryName(category.name);
+                      }}
+                    >
+                      編集
+                    </button>
+                  </>
+                )}
+              </div>
+            ))}
+          </div>
         </section>
 
         <section className={styles.panel}>
