@@ -27,15 +27,21 @@ export default function Page() {
   const [amount, setAmount] = useState("");
   const [type, setType] = useState<"expense" | "income">("expense");
   const [categoryId, setCategoryId] = useState("");
+  const [date, setDate] = useState(
+    new Date().toISOString().slice(0, 10)
+  );
 
   const [editingId, setEditingId] = useState<number | null>(null);
   const [editTitle, setEditTitle] = useState("");
   const [editAmount, setEditAmount] = useState("");
   const [editType, setEditType] = useState<"expense" | "income">("expense");
   const [editCategoryId, setEditCategoryId] = useState("");
+  const [editDate, setEditDate] = useState("");
 
   const [newCategoryName, setNewCategoryName] = useState("");
-  const [editingCategoryId, setEditingCategoryId] = useState<number | null>(null);
+  const [editingCategoryId, setEditingCategoryId] = useState<number | null>(
+    null
+  );
   const [editCategoryName, setEditCategoryName] = useState("");
 
   const API_URL = process.env.NEXT_PUBLIC_API_URL;
@@ -96,11 +102,10 @@ export default function Page() {
   }, [transactions]);
 
   const createTransaction = async () => {
-    if (!title.trim() || !amount || !categoryId) {
-      setError("タイトル、金額、カテゴリを入力してください");
+    if (!amount || !categoryId || !date) {
+      setError("金額、日付、カテゴリを入力してください");
       return;
     }
-
     const res = await fetch(`${API_URL}/api/transactions`, {
       method: "POST",
       headers: {
@@ -110,7 +115,7 @@ export default function Page() {
         title,
         amount: Number(amount),
         type,
-        date: new Date().toISOString().slice(0, 10),
+        date,
         category_id: Number(categoryId),
       }),
     });
@@ -122,6 +127,8 @@ export default function Page() {
 
     setTitle("");
     setAmount("");
+    setDate(new Date().toISOString().slice(0, 10));
+
     await fetchData();
   };
 
@@ -141,11 +148,10 @@ export default function Page() {
   };
 
   const updateTransaction = async (id: number) => {
-    if (!editTitle.trim() || !editAmount || !editCategoryId) {
-      setError("タイトル、金額、カテゴリを入力してください");
+    if (!editAmount || !editCategoryId || !editDate) {
+      setError("金額、日付、カテゴリを入力してください");
       return;
     }
-
     const res = await fetch(`${API_URL}/api/transactions/${id}`, {
       method: "PUT",
       headers: {
@@ -155,7 +161,7 @@ export default function Page() {
         title: editTitle,
         amount: Number(editAmount),
         type: editType,
-        date: new Date().toISOString().slice(0, 10),
+        date: editDate,
         category_id: Number(editCategoryId),
       }),
     });
@@ -169,45 +175,53 @@ export default function Page() {
     await fetchData();
   };
 
-  const categoryName = (id: number) => {
-    return categories.find((category) => category.id === id)?.name ?? "未分類";
-  };
-
   const createCategory = async () => {
     if (!newCategoryName.trim()) return;
-  
+
     const res = await fetch(`${API_URL}/api/categories`, {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ name: newCategoryName }),
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        name: newCategoryName,
+      }),
     });
-  
+
     if (!res.ok) {
       setError("カテゴリの追加に失敗しました");
       return;
     }
-  
+
     setNewCategoryName("");
     await fetchData();
   };
-  
+
   const updateCategory = async (id: number) => {
     if (!editCategoryName.trim()) return;
-  
+
     const res = await fetch(`${API_URL}/api/categories/${id}`, {
       method: "PUT",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ name: editCategoryName }),
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        name: editCategoryName,
+      }),
     });
-  
+
     if (!res.ok) {
       setError("カテゴリの更新に失敗しました");
       return;
     }
-  
+
     setEditingCategoryId(null);
     setEditCategoryName("");
     await fetchData();
+  };
+
+  const categoryName = (id: number) => {
+    return categories.find((category) => category.id === id)?.name ?? "未分類";
   };
 
   const yen = (value: number) => `¥${value.toLocaleString("ja-JP")}`;
@@ -247,49 +261,56 @@ export default function Page() {
           </div>
 
           <div className={styles.form}>
-            <input
-              className={styles.input}
-              placeholder="例：ランチ、給与"
-              value={title}
-              onChange={(e) => setTitle(e.target.value)}
-            />
+          <input
+            className={styles.input}
+            type="date"
+            value={date}
+            onChange={(e) => setDate(e.target.value)}
+          />
 
-            <input
-              className={styles.input}
-              type="number"
-              placeholder="金額"
-              value={amount}
-              onChange={(e) => setAmount(e.target.value)}
-            />
+          <input
+            className={styles.input}
+            type="number"
+            placeholder="金額"
+            value={amount}
+            onChange={(e) => setAmount(e.target.value)}
+          />
 
-            <select
-              className={styles.select}
-              value={type}
-              onChange={(e) =>
-                setType(e.target.value as "expense" | "income")
-              }
-            >
-              <option value="expense">支出</option>
-              <option value="income">収入</option>
-            </select>
+          <select
+            className={styles.select}
+            value={type}
+            onChange={(e) =>
+              setType(e.target.value as "expense" | "income")
+            }
+          >
+            <option value="expense">支出</option>
+            <option value="income">収入</option>
+          </select>
 
-            <select
-              className={styles.select}
-              value={categoryId}
-              onChange={(e) => setCategoryId(e.target.value)}
-            >
-              <option value="">カテゴリ</option>
+          <select
+            className={styles.select}
+            value={categoryId}
+            onChange={(e) => setCategoryId(e.target.value)}
+          >
+            <option value="">カテゴリ</option>
 
-              {categories.map((category) => (
-                <option key={category.id} value={category.id}>
-                  {category.name}
-                </option>
-              ))}
-            </select>
+            {categories.map((category) => (
+              <option key={category.id} value={category.id}>
+                {category.name}
+              </option>
+            ))}
+          </select>
 
-            <button className={styles.primaryButton} onClick={createTransaction}>
-              登録する
-            </button>
+          <input
+            className={styles.input}
+            placeholder="タイトル（任意）"
+            value={title}
+            onChange={(e) => setTitle(e.target.value)}
+          />
+
+          <button className={styles.primaryButton} onClick={createTransaction}>
+            登録する
+          </button>
           </div>
 
           {error && <p className={styles.error}>{error}</p>}
@@ -310,6 +331,7 @@ export default function Page() {
               value={newCategoryName}
               onChange={(e) => setNewCategoryName(e.target.value)}
             />
+
             <button className={styles.primaryButton} onClick={createCategory}>
               追加する
             </button>
@@ -325,12 +347,14 @@ export default function Page() {
                       value={editCategoryName}
                       onChange={(e) => setEditCategoryName(e.target.value)}
                     />
+
                     <button
                       className={styles.saveButton}
                       onClick={() => updateCategory(category.id)}
                     >
                       保存
                     </button>
+
                     <button
                       className={styles.cancelButton}
                       onClick={() => setEditingCategoryId(null)}
@@ -341,6 +365,7 @@ export default function Page() {
                 ) : (
                   <>
                     <span>{category.name}</span>
+
                     <button
                       className={styles.textButton}
                       onClick={() => {
@@ -379,8 +404,9 @@ export default function Page() {
                     <div className={styles.editForm}>
                       <input
                         className={styles.input}
-                        value={editTitle}
-                        onChange={(e) => setEditTitle(e.target.value)}
+                        type="date"
+                        value={editDate}
+                        onChange={(e) => setEditDate(e.target.value)}
                       />
 
                       <input
@@ -415,19 +441,27 @@ export default function Page() {
                         ))}
                       </select>
 
-                      <button
-                        className={styles.saveButton}
-                        onClick={() => updateTransaction(t.id)}
-                      >
-                        保存
-                      </button>
+                      <input
+                        className={styles.input}
+                        placeholder="タイトル（任意）"
+                        value={editTitle}
+                        onChange={(e) => setEditTitle(e.target.value)}
+                      />
+                      <div className={styles.editActions}>
+                        <button
+                          className={styles.cancelButton}
+                          onClick={() => setEditingId(null)}
+                        >
+                          キャンセル
+                        </button>
 
-                      <button
-                        className={styles.cancelButton}
-                        onClick={() => setEditingId(null)}
-                      >
-                        キャンセル
-                      </button>
+                        <button
+                          className={styles.saveButton}
+                          onClick={() => updateTransaction(t.id)}
+                        >
+                          保存
+                        </button>
+                      </div>
                     </div>
                   ) : (
                     <>
@@ -468,6 +502,7 @@ export default function Page() {
                               setEditingId(t.id);
                               setEditTitle(t.title);
                               setEditAmount(String(t.amount));
+                              setEditDate(t.date);
                               setEditType(t.type);
                               setEditCategoryId(String(t.category_id));
                             }}
