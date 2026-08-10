@@ -1,19 +1,42 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
+import styles from "./page.module.css";
+
+type Transaction = {
+  id: number;
+  title: string;
+  amount: number;
+  type: "expense" | "income";
+  date: string;
+  category_id: number;
+};
+
+type Category = {
+  id: number;
+  name: string;
+};
 
 export default function Page() {
-  const [transactions, setTransactions] = useState<any[]>([]);
+  const [transactions, setTransactions] = useState<Transaction[]>([]);
+  const [categories, setCategories] = useState<Category[]>([]);
   const [error, setError] = useState("");
+  const [loading, setLoading] = useState(true);
 
   const [title, setTitle] = useState("");
   const [amount, setAmount] = useState("");
-  const [type, setType] = useState("expense");
+  const [type, setType] = useState<"expense" | "income">("expense");
+  const [categoryId, setCategoryId] = useState("");
 
   const [editingId, setEditingId] = useState<number | null>(null);
   const [editTitle, setEditTitle] = useState("");
   const [editAmount, setEditAmount] = useState("");
-  const [editType, setEditType] = useState("expense");
+  const [editType, setEditType] = useState<"expense" | "income">("expense");
+  const [editCategoryId, setEditCategoryId] = useState("");
+
+  const [newCategoryName, setNewCategoryName] = useState("");
+  const [editingCategoryId, setEditingCategoryId] = useState<number | null>(null);
+  const [editCategoryName, setEditCategoryName] = useState("");
 
   const API_URL = process.env.NEXT_PUBLIC_API_URL;
 
@@ -22,20 +45,33 @@ export default function Page() {
       if (!API_URL) {
         throw new Error("NEXT_PUBLIC_API_URL が設定されていません");
       }
-  
-      const res = await fetch(`${API_URL}/api/transactions`);
-  
-      if (!res.ok) {
-        throw new Error(`取得に失敗しました: ${res.status}`);
+
+      const [transactionsRes, categoriesRes] = await Promise.all([
+        fetch(`${API_URL}/api/transactions`),
+        fetch(`${API_URL}/api/categories`),
+      ]);
+
+      if (!transactionsRes.ok || !categoriesRes.ok) {
+        throw new Error("データの取得に失敗しました");
       }
-  
-      const data = await res.json();
-      setTransactions(data.data);
+
+      const transactionsData = await transactionsRes.json();
+      const categoriesData = await categoriesRes.json();
+
+      setTransactions(transactionsData.data);
+      setCategories(categoriesData);
+
+      setCategoryId(
+        (current) => current || String(categoriesData[0]?.id ?? "")
+      );
+
       setError("");
     } catch (err) {
       setError(
         err instanceof Error ? err.message : "一覧を取得できませんでした"
       );
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -43,8 +79,29 @@ export default function Page() {
     fetchData();
   }, []);
 
+  const summary = useMemo(() => {
+    const income = transactions
+      .filter((t) => t.type === "income")
+      .reduce((sum, t) => sum + t.amount, 0);
+
+    const expense = transactions
+      .filter((t) => t.type === "expense")
+      .reduce((sum, t) => sum + t.amount, 0);
+
+    return {
+      income,
+      expense,
+      balance: income - expense,
+    };
+  }, [transactions]);
+
   const createTransaction = async () => {
-    await fetch(`${API_URL}/api/transactions`, {
+    if (!title.trim() || !amount || !categoryId) {
+      setError("タイトル、金額、カテゴリを入力してください");
+      return;
+    }
+
+    const res = await fetch(`${API_URL}/api/transactions`, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
@@ -53,29 +110,43 @@ export default function Page() {
         title,
         amount: Number(amount),
         type,
-        date: "2026-05-02",
-        category_id: 1,
+        date: new Date().toISOString().slice(0, 10),
+        category_id: Number(categoryId),
       }),
     });
 
-    await fetchData();
+    if (!res.ok) {
+      setError("登録に失敗しました");
+      return;
+    }
+
     setTitle("");
     setAmount("");
+    await fetchData();
   };
 
   const deleteTransaction = async (id: number) => {
-    if (!confirm("削除しますか？")) return;
+    if (!confirm("この収支を削除しますか？")) return;
 
-    await fetch(`${API_URL}/api/transactions/${id}`, {
+    const res = await fetch(`${API_URL}/api/transactions/${id}`, {
       method: "DELETE",
     });
+
+    if (!res.ok) {
+      setError("削除に失敗しました");
+      return;
+    }
 
     await fetchData();
   };
 
-  // 👇 追加（更新処理）
   const updateTransaction = async (id: number) => {
-    await fetch(`${API_URL}/api/transactions/${id}`, {
+    if (!editTitle.trim() || !editAmount || !editCategoryId) {
+      setError("タイトル、金額、カテゴリを入力してください");
+      return;
+    }
+
+    const res = await fetch(`${API_URL}/api/transactions/${id}`, {
       method: "PUT",
       headers: {
         "Content-Type": "application/json",
@@ -84,90 +155,342 @@ export default function Page() {
         title: editTitle,
         amount: Number(editAmount),
         type: editType,
-        date: "2026-05-02",
-        category_id: 1,
+        date: new Date().toISOString().slice(0, 10),
+        category_id: Number(editCategoryId),
       }),
     });
+
+    if (!res.ok) {
+      setError("更新に失敗しました");
+      return;
+    }
 
     setEditingId(null);
     await fetchData();
   };
 
+  const categoryName = (id: number) => {
+    return categories.find((category) => category.id === id)?.name ?? "未分類";
+  };
+
+  const createCategory = async () => {
+    if (!newCategoryName.trim()) return;
+  
+    const res = await fetch(`${API_URL}/api/categories`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ name: newCategoryName }),
+    });
+  
+    if (!res.ok) {
+      setError("カテゴリの追加に失敗しました");
+      return;
+    }
+  
+    setNewCategoryName("");
+    await fetchData();
+  };
+  
+  const updateCategory = async (id: number) => {
+    if (!editCategoryName.trim()) return;
+  
+    const res = await fetch(`${API_URL}/api/categories/${id}`, {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ name: editCategoryName }),
+    });
+  
+    if (!res.ok) {
+      setError("カテゴリの更新に失敗しました");
+      return;
+    }
+  
+    setEditingCategoryId(null);
+    setEditCategoryName("");
+    await fetchData();
+  };
+
+  const yen = (value: number) => `¥${value.toLocaleString("ja-JP")}`;
+
   return (
-    <div>
-      <h1>収支一覧</h1>
+    <main className={styles.page}>
+      <section className={styles.container}>
+        <header className={styles.hero}>
+          <p className={styles.eyebrow}>PERSONAL FINANCE</p>
+          <h1>収支管理</h1>
+          <p>毎日の収入と支出をシンプルに記録しましょう。</p>
+        </header>
 
-      {error && <p style={{ color: "red" }}>{error}</p>}
+        <section className={styles.summary}>
+          <div className={styles.summaryCard}>
+            <span>残高</span>
+            <strong>{yen(summary.balance)}</strong>
+          </div>
 
-      {/* 登録フォーム */}
-      <div style={{ marginBottom: "20px" }}>
-        <input
-          placeholder="タイトル"
-          value={title}
-          onChange={(e) => setTitle(e.target.value)}
-        />
-        <input
-          type="number"
-          placeholder="金額"
-          value={amount}
-          onChange={(e) => setAmount(e.target.value)}
-        />
-        <select value={type} onChange={(e) => setType(e.target.value)}>
-          <option value="expense">支出</option>
-          <option value="income">収入</option>
-        </select>
-        <button onClick={createTransaction}>登録</button>
-      </div>
+          <div className={`${styles.summaryCard} ${styles.incomeCard}`}>
+            <span>収入</span>
+            <strong>+{yen(summary.income)}</strong>
+          </div>
 
-      {/* 一覧 */}
-      {transactions.map((t) => (
-        <div key={t.id}>
-          {editingId === t.id ? (
-            // 👇 編集モード
-            <>
-              <input
-                value={editTitle}
-                onChange={(e) => setEditTitle(e.target.value)}
-              />
-              <input
-                type="number"
-                value={editAmount}
-                onChange={(e) => setEditAmount(e.target.value)}
-              />
-              <select
-                value={editType}
-                onChange={(e) => setEditType(e.target.value)}
-              >
-                <option value="expense">支出</option>
-                <option value="income">収入</option>
-              </select>
+          <div className={`${styles.summaryCard} ${styles.expenseCard}`}>
+            <span>支出</span>
+            <strong>-{yen(summary.expense)}</strong>
+          </div>
+        </section>
 
-              <button onClick={() => updateTransaction(t.id)}>保存</button>
-              <button onClick={() => setEditingId(null)}>キャンセル</button>
-            </>
+        <section className={styles.panel}>
+          <div className={styles.panelHeader}>
+            <div>
+              <p className={styles.sectionLabel}>NEW TRANSACTION</p>
+              <h2>収支を登録</h2>
+            </div>
+          </div>
+
+          <div className={styles.form}>
+            <input
+              className={styles.input}
+              placeholder="例：ランチ、給与"
+              value={title}
+              onChange={(e) => setTitle(e.target.value)}
+            />
+
+            <input
+              className={styles.input}
+              type="number"
+              placeholder="金額"
+              value={amount}
+              onChange={(e) => setAmount(e.target.value)}
+            />
+
+            <select
+              className={styles.select}
+              value={type}
+              onChange={(e) =>
+                setType(e.target.value as "expense" | "income")
+              }
+            >
+              <option value="expense">支出</option>
+              <option value="income">収入</option>
+            </select>
+
+            <select
+              className={styles.select}
+              value={categoryId}
+              onChange={(e) => setCategoryId(e.target.value)}
+            >
+              <option value="">カテゴリ</option>
+
+              {categories.map((category) => (
+                <option key={category.id} value={category.id}>
+                  {category.name}
+                </option>
+              ))}
+            </select>
+
+            <button className={styles.primaryButton} onClick={createTransaction}>
+              登録する
+            </button>
+          </div>
+
+          {error && <p className={styles.error}>{error}</p>}
+        </section>
+
+        <section className={styles.panel}>
+          <div className={styles.panelHeader}>
+            <div>
+              <p className={styles.sectionLabel}>CATEGORIES</p>
+              <h2>カテゴリ管理</h2>
+            </div>
+          </div>
+
+          <div className={styles.categoryForm}>
+            <input
+              className={styles.input}
+              placeholder="例：交通費、趣味"
+              value={newCategoryName}
+              onChange={(e) => setNewCategoryName(e.target.value)}
+            />
+            <button className={styles.primaryButton} onClick={createCategory}>
+              追加する
+            </button>
+          </div>
+
+          <div className={styles.categoryList}>
+            {categories.map((category) => (
+              <div className={styles.categoryRow} key={category.id}>
+                {editingCategoryId === category.id ? (
+                  <>
+                    <input
+                      className={styles.input}
+                      value={editCategoryName}
+                      onChange={(e) => setEditCategoryName(e.target.value)}
+                    />
+                    <button
+                      className={styles.saveButton}
+                      onClick={() => updateCategory(category.id)}
+                    >
+                      保存
+                    </button>
+                    <button
+                      className={styles.cancelButton}
+                      onClick={() => setEditingCategoryId(null)}
+                    >
+                      キャンセル
+                    </button>
+                  </>
+                ) : (
+                  <>
+                    <span>{category.name}</span>
+                    <button
+                      className={styles.textButton}
+                      onClick={() => {
+                        setEditingCategoryId(category.id);
+                        setEditCategoryName(category.name);
+                      }}
+                    >
+                      編集
+                    </button>
+                  </>
+                )}
+              </div>
+            ))}
+          </div>
+        </section>
+
+        <section className={styles.panel}>
+          <div className={styles.panelHeader}>
+            <div>
+              <p className={styles.sectionLabel}>HISTORY</p>
+              <h2>収支一覧</h2>
+            </div>
+
+            <span className={styles.count}>{transactions.length} 件</span>
+          </div>
+
+          {loading ? (
+            <p className={styles.empty}>読み込み中...</p>
+          ) : transactions.length === 0 ? (
+            <p className={styles.empty}>まだ収支がありません。</p>
           ) : (
-            // 👇 表示モード
-            <>
-              {t.type === "expense" ? "支出" : "収入"} / {t.title} / {t.amount}円
+            <div className={styles.transactionList}>
+              {transactions.map((t) => (
+                <div className={styles.transaction} key={t.id}>
+                  {editingId === t.id ? (
+                    <div className={styles.editForm}>
+                      <input
+                        className={styles.input}
+                        value={editTitle}
+                        onChange={(e) => setEditTitle(e.target.value)}
+                      />
 
-              <button
-                onClick={() => {
-                  setEditingId(t.id);
-                  setEditTitle(t.title);
-                  setEditAmount(String(t.amount));
-                  setEditType(t.type);
-                }}
-              >
-                編集
-              </button>
+                      <input
+                        className={styles.input}
+                        type="number"
+                        value={editAmount}
+                        onChange={(e) => setEditAmount(e.target.value)}
+                      />
 
-              <button onClick={() => deleteTransaction(t.id)}>
-                削除
-              </button>
-            </>
+                      <select
+                        className={styles.select}
+                        value={editType}
+                        onChange={(e) =>
+                          setEditType(e.target.value as "expense" | "income")
+                        }
+                      >
+                        <option value="expense">支出</option>
+                        <option value="income">収入</option>
+                      </select>
+
+                      <select
+                        className={styles.select}
+                        value={editCategoryId}
+                        onChange={(e) => setEditCategoryId(e.target.value)}
+                      >
+                        <option value="">カテゴリ</option>
+
+                        {categories.map((category) => (
+                          <option key={category.id} value={category.id}>
+                            {category.name}
+                          </option>
+                        ))}
+                      </select>
+
+                      <button
+                        className={styles.saveButton}
+                        onClick={() => updateTransaction(t.id)}
+                      >
+                        保存
+                      </button>
+
+                      <button
+                        className={styles.cancelButton}
+                        onClick={() => setEditingId(null)}
+                      >
+                        キャンセル
+                      </button>
+                    </div>
+                  ) : (
+                    <>
+                      <div className={styles.transactionInfo}>
+                        <span
+                          className={
+                            t.type === "income"
+                              ? styles.incomeIcon
+                              : styles.expenseIcon
+                          }
+                        >
+                          {t.type === "income" ? "↓" : "↑"}
+                        </span>
+
+                        <div>
+                          <strong>{t.title}</strong>
+                          <small>{t.date}</small>
+                          <small>{categoryName(t.category_id)}</small>
+                        </div>
+                      </div>
+
+                      <div className={styles.transactionRight}>
+                        <strong
+                          className={
+                            t.type === "income"
+                              ? styles.incomeAmount
+                              : styles.expenseAmount
+                          }
+                        >
+                          {t.type === "income" ? "+" : "-"}
+                          {yen(t.amount)}
+                        </strong>
+
+                        <div className={styles.actions}>
+                          <button
+                            className={styles.textButton}
+                            onClick={() => {
+                              setEditingId(t.id);
+                              setEditTitle(t.title);
+                              setEditAmount(String(t.amount));
+                              setEditType(t.type);
+                              setEditCategoryId(String(t.category_id));
+                            }}
+                          >
+                            編集
+                          </button>
+
+                          <button
+                            className={styles.deleteButton}
+                            onClick={() => deleteTransaction(t.id)}
+                          >
+                            削除
+                          </button>
+                        </div>
+                      </div>
+                    </>
+                  )}
+                </div>
+              ))}
+            </div>
           )}
-        </div>
-      ))}
-    </div>
+        </section>
+      </section>
+    </main>
   );
 }
