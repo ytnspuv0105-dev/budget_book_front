@@ -1,3 +1,3 @@
 export type ApiError = {
-  detail?: string;
+  detail?: unknown;
 };

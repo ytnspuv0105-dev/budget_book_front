@@ -1,6 +1,16 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import {
+  createCategory as createCategoryRequest,
+  createTransaction as createTransactionRequest,
+  deleteTransaction as deleteTransactionRequest,
+  getApiErrorMessage,
+  getCategories,
+  getTransactions,
+  updateCategory as updateCategoryRequest,
+  updateTransaction as updateTransactionRequest,
+} from "@/lib/api";
 import type { Category } from "@/types/category";
 import type {
   Transaction,
@@ -35,25 +45,12 @@ export default function Page() {
   );
   const [editCategoryName, setEditCategoryName] = useState("");
 
-  const API_URL = process.env.NEXT_PUBLIC_API_URL;
-
   const fetchData = async () => {
     try {
-      if (!API_URL) {
-        throw new Error("NEXT_PUBLIC_API_URL が設定されていません");
-      }
-
-      const [transactionsRes, categoriesRes] = await Promise.all([
-        fetch(`${API_URL}/api/transactions`),
-        fetch(`${API_URL}/api/categories`),
+      const [transactionsData, categoriesData] = await Promise.all([
+        getTransactions(),
+        getCategories(),
       ]);
-
-      if (!transactionsRes.ok || !categoriesRes.ok) {
-        throw new Error("データの取得に失敗しました");
-      }
-
-      const transactionsData = await transactionsRes.json();
-      const categoriesData = await categoriesRes.json();
 
       setTransactions(transactionsData.data);
       setCategories(categoriesData);
@@ -64,9 +61,7 @@ export default function Page() {
 
       setError("");
     } catch (err) {
-      setError(
-        err instanceof Error ? err.message : "一覧を取得できませんでした"
-      );
+      setError(getApiErrorMessage(err, "一覧を取得できませんでした"));
     } finally {
       setLoading(false);
     }
@@ -97,45 +92,35 @@ export default function Page() {
       setError("金額、日付、カテゴリを入力してください");
       return;
     }
-    const res = await fetch(`${API_URL}/api/transactions`, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({
+
+    try {
+      await createTransactionRequest({
         title,
         amount: Number(amount),
         type,
         date,
         category_id: Number(categoryId),
-      }),
-    });
+      });
 
-    if (!res.ok) {
-      setError("登録に失敗しました");
-      return;
+      setTitle("");
+      setAmount("");
+      setDate(new Date().toISOString().slice(0, 10));
+
+      await fetchData();
+    } catch (err) {
+      setError(getApiErrorMessage(err, "登録に失敗しました"));
     }
-
-    setTitle("");
-    setAmount("");
-    setDate(new Date().toISOString().slice(0, 10));
-
-    await fetchData();
   };
 
   const deleteTransaction = async (id: number) => {
     if (!confirm("この収支を削除しますか？")) return;
 
-    const res = await fetch(`${API_URL}/api/transactions/${id}`, {
-      method: "DELETE",
-    });
-
-    if (!res.ok) {
-      setError("削除に失敗しました");
-      return;
+    try {
+      await deleteTransactionRequest(id);
+      await fetchData();
+    } catch (err) {
+      setError(getApiErrorMessage(err, "削除に失敗しました"));
     }
-
-    await fetchData();
   };
 
   const updateTransaction = async (id: number) => {
@@ -143,72 +128,47 @@ export default function Page() {
       setError("金額、日付、カテゴリを入力してください");
       return;
     }
-    const res = await fetch(`${API_URL}/api/transactions/${id}`, {
-      method: "PUT",
-      headers: {
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({
+    try {
+      await updateTransactionRequest(id, {
         title: editTitle,
         amount: Number(editAmount),
         type: editType,
         date: editDate,
         category_id: Number(editCategoryId),
-      }),
-    });
+      });
 
-    if (!res.ok) {
-      setError("更新に失敗しました");
-      return;
+      setEditingId(null);
+      await fetchData();
+    } catch (err) {
+      setError(getApiErrorMessage(err, "更新に失敗しました"));
     }
-
-    setEditingId(null);
-    await fetchData();
   };
 
   const createCategory = async () => {
     if (!newCategoryName.trim()) return;
 
-    const res = await fetch(`${API_URL}/api/categories`, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({
-        name: newCategoryName,
-      }),
-    });
+    try {
+      await createCategoryRequest({ name: newCategoryName });
 
-    if (!res.ok) {
-      setError("カテゴリの追加に失敗しました");
-      return;
+      setNewCategoryName("");
+      await fetchData();
+    } catch (err) {
+      setError(getApiErrorMessage(err, "カテゴリの追加に失敗しました"));
     }
-
-    setNewCategoryName("");
-    await fetchData();
   };
 
   const updateCategory = async (id: number) => {
     if (!editCategoryName.trim()) return;
 
-    const res = await fetch(`${API_URL}/api/categories/${id}`, {
-      method: "PUT",
-      headers: {
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({
-        name: editCategoryName,
-      }),
-    });
+    try {
+      await updateCategoryRequest(id, { name: editCategoryName });
 
-    if (!res.ok) {
-      setError("カテゴリの更新に失敗しました");
-      return;
+      setEditingCategoryId(null);
+      setEditCategoryName("");
+      await fetchData();
+    } catch (err) {
+      setError(getApiErrorMessage(err, "カテゴリの更新に失敗しました"));
     }
-
-    setEditingCategoryId(null);
-    setEditCategoryName("");
-    await fetchData();
   };
 
   const categoryName = (id: number) => {
