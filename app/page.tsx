@@ -1,21 +1,12 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import type { Category } from "@/types/category";
+import type {
+  Transaction,
+  TransactionType,
+} from "@/types/transaction";
 import styles from "./page.module.css";
-
-type Transaction = {
-  id: number;
-  title: string;
-  amount: number;
-  type: "expense" | "income";
-  date: string;
-  category_id: number;
-};
-
-type Category = {
-  id: number;
-  name: string;
-};
 
 export default function Page() {
   const [transactions, setTransactions] = useState<Transaction[]>([]);
@@ -25,7 +16,7 @@ export default function Page() {
 
   const [title, setTitle] = useState("");
   const [amount, setAmount] = useState("");
-  const [type, setType] = useState<"expense" | "income">("expense");
+  const [type, setType] = useState<TransactionType>("expense");
   const [categoryId, setCategoryId] = useState("");
   const [date, setDate] = useState(
     new Date().toISOString().slice(0, 10)
@@ -34,7 +25,7 @@ export default function Page() {
   const [editingId, setEditingId] = useState<number | null>(null);
   const [editTitle, setEditTitle] = useState("");
   const [editAmount, setEditAmount] = useState("");
-  const [editType, setEditType] = useState<"expense" | "income">("expense");
+  const [editType, setEditType] = useState<TransactionType>("expense");
   const [editCategoryId, setEditCategoryId] = useState("");
   const [editDate, setEditDate] = useState("");
 
@@ -280,7 +271,7 @@ export default function Page() {
             className={styles.select}
             value={type}
             onChange={(e) =>
-              setType(e.target.value as "expense" | "income")
+              setType(e.target.value as TransactionType)
             }
           >
             <option value="expense">支出</option>
@@ -420,7 +411,7 @@ export default function Page() {
                         className={styles.select}
                         value={editType}
                         onChange={(e) =>
-                          setEditType(e.target.value as "expense" | "income")
+                          setEditType(e.target.value as TransactionType)
                         }
                       >
                         <option value="expense">支出</option>
@@ -500,7 +491,7 @@ export default function Page() {
                             className={styles.textButton}
                             onClick={() => {
                               setEditingId(t.id);
-                              setEditTitle(t.title);
+                              setEditTitle(t.title ?? "");
                               setEditAmount(String(t.amount));
                               setEditDate(t.date);
                               setEditType(t.type);
