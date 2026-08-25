@@ -18,11 +18,19 @@ import type {
 } from "@/types/transaction";
 import styles from "./page.module.css";
 
+type PendingAction =
+  | "create-transaction"
+  | "create-category"
+  | `update-transaction-${number}`
+  | `delete-transaction-${number}`
+  | `update-category-${number}`;
+
 export default function Page() {
   const [transactions, setTransactions] = useState<Transaction[]>([]);
   const [categories, setCategories] = useState<Category[]>([]);
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(true);
+  const [pendingAction, setPendingAction] = useState<PendingAction | null>(null);
 
   const [title, setTitle] = useState("");
   const [amount, setAmount] = useState("");
@@ -88,10 +96,15 @@ export default function Page() {
   }, [transactions]);
 
   const createTransaction = async () => {
+    if (pendingAction) return;
+
     if (!amount || !categoryId || !date) {
       setError("金額、日付、カテゴリを入力してください");
       return;
     }
+
+    setPendingAction("create-transaction");
+    setError("");
 
     try {
       await createTransactionRequest({
@@ -109,25 +122,39 @@ export default function Page() {
       await fetchData();
     } catch (err) {
       setError(getApiErrorMessage(err, "登録に失敗しました"));
+    } finally {
+      setPendingAction(null);
     }
   };
 
   const deleteTransaction = async (id: number) => {
+    if (pendingAction) return;
     if (!confirm("この収支を削除しますか？")) return;
+
+    setPendingAction(`delete-transaction-${id}`);
+    setError("");
 
     try {
       await deleteTransactionRequest(id);
       await fetchData();
     } catch (err) {
       setError(getApiErrorMessage(err, "削除に失敗しました"));
+    } finally {
+      setPendingAction(null);
     }
   };
 
   const updateTransaction = async (id: number) => {
+    if (pendingAction) return;
+
     if (!editAmount || !editCategoryId || !editDate) {
       setError("金額、日付、カテゴリを入力してください");
       return;
     }
+
+    setPendingAction(`update-transaction-${id}`);
+    setError("");
+
     try {
       await updateTransactionRequest(id, {
         title: editTitle,
@@ -141,11 +168,17 @@ export default function Page() {
       await fetchData();
     } catch (err) {
       setError(getApiErrorMessage(err, "更新に失敗しました"));
+    } finally {
+      setPendingAction(null);
     }
   };
 
   const createCategory = async () => {
+    if (pendingAction) return;
     if (!newCategoryName.trim()) return;
+
+    setPendingAction("create-category");
+    setError("");
 
     try {
       await createCategoryRequest({ name: newCategoryName });
@@ -154,11 +187,17 @@ export default function Page() {
       await fetchData();
     } catch (err) {
       setError(getApiErrorMessage(err, "カテゴリの追加に失敗しました"));
+    } finally {
+      setPendingAction(null);
     }
   };
 
   const updateCategory = async (id: number) => {
+    if (pendingAction) return;
     if (!editCategoryName.trim()) return;
+
+    setPendingAction(`update-category-${id}`);
+    setError("");
 
     try {
       await updateCategoryRequest(id, { name: editCategoryName });
@@ -168,6 +207,8 @@ export default function Page() {
       await fetchData();
     } catch (err) {
       setError(getApiErrorMessage(err, "カテゴリの更新に失敗しました"));
+    } finally {
+      setPendingAction(null);
     }
   };
 
@@ -259,8 +300,12 @@ export default function Page() {
             onChange={(e) => setTitle(e.target.value)}
           />
 
-          <button className={styles.primaryButton} onClick={createTransaction}>
-            登録する
+          <button
+            className={styles.primaryButton}
+            disabled={pendingAction !== null}
+            onClick={createTransaction}
+          >
+            {pendingAction === "create-transaction" ? "登録中..." : "登録する"}
           </button>
           </div>
 
@@ -283,8 +328,12 @@ export default function Page() {
               onChange={(e) => setNewCategoryName(e.target.value)}
             />
 
-            <button className={styles.primaryButton} onClick={createCategory}>
-              追加する
+            <button
+              className={styles.primaryButton}
+              disabled={pendingAction !== null}
+              onClick={createCategory}
+            >
+              {pendingAction === "create-category" ? "追加中..." : "追加する"}
             </button>
           </div>
 
@@ -301,13 +350,17 @@ export default function Page() {
 
                     <button
                       className={styles.saveButton}
+                      disabled={pendingAction !== null}
                       onClick={() => updateCategory(category.id)}
                     >
-                      保存
+                      {pendingAction === `update-category-${category.id}`
+                        ? "保存中..."
+                        : "保存"}
                     </button>
 
                     <button
                       className={styles.cancelButton}
+                      disabled={pendingAction !== null}
                       onClick={() => setEditingCategoryId(null)}
                     >
                       キャンセル
@@ -319,6 +372,7 @@ export default function Page() {
 
                     <button
                       className={styles.textButton}
+                      disabled={pendingAction !== null}
                       onClick={() => {
                         setEditingCategoryId(category.id);
                         setEditCategoryName(category.name);
@@ -401,6 +455,7 @@ export default function Page() {
                       <div className={styles.editActions}>
                         <button
                           className={styles.cancelButton}
+                          disabled={pendingAction !== null}
                           onClick={() => setEditingId(null)}
                         >
                           キャンセル
@@ -408,9 +463,12 @@ export default function Page() {
 
                         <button
                           className={styles.saveButton}
+                          disabled={pendingAction !== null}
                           onClick={() => updateTransaction(t.id)}
                         >
-                          保存
+                          {pendingAction === `update-transaction-${t.id}`
+                            ? "保存中..."
+                            : "保存"}
                         </button>
                       </div>
                     </div>
@@ -449,6 +507,7 @@ export default function Page() {
                         <div className={styles.actions}>
                           <button
                             className={styles.textButton}
+                            disabled={pendingAction !== null}
                             onClick={() => {
                               setEditingId(t.id);
                               setEditTitle(t.title ?? "");
@@ -463,9 +522,12 @@ export default function Page() {
 
                           <button
                             className={styles.deleteButton}
+                            disabled={pendingAction !== null}
                             onClick={() => deleteTransaction(t.id)}
                           >
-                            削除
+                            {pendingAction === `delete-transaction-${t.id}`
+                              ? "削除中..."
+                              : "削除"}
                           </button>
                         </div>
                       </div>
