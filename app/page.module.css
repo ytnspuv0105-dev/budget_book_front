@@ -200,6 +200,15 @@
   background: #1d4ed8;
 }
 
+.primaryButton:disabled,
+.saveButton:disabled,
+.cancelButton:disabled,
+.textButton:disabled,
+.deleteButton:disabled {
+  cursor: not-allowed;
+  opacity: 0.55;
+}
+
 .error {
   margin: 16px 0 0;
   color: #e11d48;
